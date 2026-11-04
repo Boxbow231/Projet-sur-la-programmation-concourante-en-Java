@@ -1,4 +1,5 @@
 package ressource;
 
-public class Vehicule {
+public class Vehicule{
+
 }
