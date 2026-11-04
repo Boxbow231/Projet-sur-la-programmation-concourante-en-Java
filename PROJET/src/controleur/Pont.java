@@ -57,11 +57,25 @@ public class Pont {
 
     }
 
-    private int calculerIndexReel(int indexCourant, int i, Sens sens) {
-    }
-
     private boolean sontSegmentsLibres(int indexCourant, int nbSegmentsNecessaires, Sens sens) {
-        if
+        for (int i = 0; i < nbSegmentsNecessaires; i++) {
+            int indexAVerifier = calculerIndexReel(indexCourant, i, sens);
+            if (indexAVerifier < 0 || indexAVerifier >= nbSegment) {
+                return false;
+            }
+            if (segments[indexAVerifier].isOccupe()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    private int calculerIndexReel(int indexBase, int decalage, Sens sens) {
+        if (sens == Sens.GAUCHE_DROITE) {
+            return indexBase - decalage;
+        }
+        else {
+            return indexBase + decalage;
+        }
     }
 }
 
