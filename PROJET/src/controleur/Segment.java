@@ -2,45 +2,36 @@ package controleur;
 
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import ressource.Vehicule;
 
 /**
  * Représente un segment individuel du pont mobile.
  * Chaque segment est une ressource partagée.
  */
-public class Segment{
+public class Segment {
     private final int id;
     private final ReentrantLock lock = new ReentrantLock(true);
     private final Condition estLibre = lock.newCondition();
 
-    private final Voiture  occupant = null;
+    private Vehicule occupant = null;
+
     public Segment(int id) {
         this.id = id;
     }
 
-    public int getId(){
+    public int getId() {
         return id;
     }
 
-    /**
-     * Vérifie si le segment est libre sans bloquer.
-     */
-    public boolean isLibre(){
+    public boolean isLibre() {
         lock.lock();
-        try{
+        try {
             return occupant == null;
         } finally {
             lock.unlock();
         }
     }
 
-    /**
-     * Tente de réserver le segment sans mise en attente (non bloquant).
-     * Très utile pour les camions (2 segments) et convois (4 segments)
-     * afin de réserver plusieurs segments de manière atomique sans interblocage.
-     *
-     * @param v Le véhicule demandeur
-     * @return true si la réservation a réussi, false sinon
-     */
     public boolean tryOccuper(Vehicule v) {
         lock.lock();
         try {
@@ -54,13 +45,6 @@ public class Segment{
         }
     }
 
-    /**
-     * Bloque le thread appelant jusqu'à ce que le segment devienne disponible,
-     * puis l'occupe pour le véhicule donné.
-     *
-     * @param v Le véhicule demandeur
-     * @throws InterruptedException si le thread est interrompu pendant l'attente
-     */
     public void entrer(Vehicule v) throws InterruptedException {
         lock.lock();
         try {
@@ -73,12 +57,6 @@ public class Segment{
         }
     }
 
-    /**
-     * Libère le segment lorsqu'un véhicule l'a complètement quitté.
-     * Réveille les threads en attente de ce segment.
-     *
-     * @param v Le véhicule qui quitte le segment
-     */
     public void sortir(Vehicule v) {
         lock.lock();
         try {
@@ -91,9 +69,6 @@ public class Segment{
         }
     }
 
-    /**
-     * Retourne le véhicule occupant actuellement le segment (pour l'affichage ANSI).
-     */
     public Vehicule getOccupant() {
         lock.lock();
         try {
@@ -107,10 +82,9 @@ public class Segment{
     public String toString() {
         lock.lock();
         try {
-            return "[S" + id + ": " + (occupant == null ? "LIBRE" : occupant.getIdVehicule()) + "]";
+            return "[S" + id + ": " + (occupant == null ? "LIBRE" : occupant.toString()) + "]";
         } finally {
             lock.unlock();
         }
     }
-
 }
