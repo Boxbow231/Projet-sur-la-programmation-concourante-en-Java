@@ -1,24 +1,34 @@
 package controleur;
 
-import ressource.Vehicule;
-import ressource.VehiculePrioritaire;
+import thread.AffichageConsole;
+import ressource.Bateau;
 import thread.ControleurOuverture;
+import ressource.Vehicule;
+
+import java.util.LinkedList;
+import java.util.Queue;
 
 public class Pont {
-
-    private final Segment[] segments;
     private final int nbSegment;
+    private final Segment[] segments;
     private EtatPont etat;
-
-    private int vehiculesSurPont = 0;
-    private int vehiculesSensGaucheDroite = 0;
-    private int vehiculesSensDroiteGauche = 0;
-
-    private boolean convoiEnAttenteGaucheDroite = false;
-    private boolean convoiEnAttenteDroiteGauche = false;
-    private boolean vehiculePrioritaireActif = false;
-
     private ControleurOuverture controleur;
+
+    // Compteurs de véhicules sur le pont par sens
+    private int vehiculesGD = 0;
+    private int vehiculesDG = 0;
+
+    // Gestion des Convois Exceptionnels
+    private int convoisEnAttenteGD = 0;
+    private int convoisEnAttenteDG = 0;
+    private int convoisSurPont = 0;
+
+    // Gestion des Véhicules Prioritaires (Ambulances / Pompiers)
+    private int prioritairesActifs = 0;
+
+    // Gestion des Bateaux (File FIFO commune)
+    private final Queue<Bateau> fileBateaux = new LinkedList<>();
+    private boolean bateauEnCoursDePassage = false;
 
     public Pont(int nbSegment) {
         this.nbSegment = nbSegment;
@@ -29,205 +39,206 @@ public class Pont {
         this.etat = EtatPont.FERME;
     }
 
-    public Segment[] getSegments() {
-        return segments;
+    public void setControleur(ControleurOuverture controleur) {
+        this.controleur = controleur;
     }
 
     public int getNbSegment() {
         return nbSegment;
     }
 
+    public Segment[] getSegments() {
+        return segments;
+    }
+
     public synchronized EtatPont getEtat() {
         return etat;
     }
 
-    public synchronized int getVehiculesSurPont() {
-        return vehiculesSurPont;
+    public synchronized int getPrioritairesActifs() {
+        return prioritairesActifs;
     }
 
-    public synchronized boolean isVehiculePrioritaireActif() {
-        return vehiculePrioritaireActif;
+    public synchronized int getNbBateauxEnAttente() {
+        return fileBateaux.size();
     }
 
-    /**
-     * Entrée sur le pont : incrémente les compteurs du sens concerné.
-     */
-    public synchronized void entrerPont(Sens sens) {
-        vehiculesSurPont++;
-        if (sens == Sens.GAUCHE_DROITE) {
-            vehiculesSensGaucheDroite++;
-        } else if (sens == Sens.DROITE_GAUCHE) {
-            vehiculesSensDroiteGauche++;
-        }
-    }
+    // --- 1. GESTION DES VÉHICULES NORMAUX, CAMIONS ET CONVOIS ---
 
-    /**
-     * Sortie du pont : décrémente les compteurs et notifie les threads en attente.
-     */
-    public synchronized void sortirPont(Sens sens) {
-        vehiculesSurPont--;
-        if (sens == Sens.GAUCHE_DROITE) {
-            vehiculesSensGaucheDroite--;
-        } else if (sens == Sens.DROITE_GAUCHE) {
-            vehiculesSensDroiteGauche--;
+    public synchronized void entrerPont(Vehicule v, int nbSeg, Sens sens, boolean isConvoi) throws InterruptedException {
+        if (isConvoi) {
+            // Bloque immédiatement l'entrée du sens opposé
+            if (sens == Sens.GAUCHE_DROITE) convoisEnAttenteGD++;
+            else convoisEnAttenteDG++;
+            AffichageConsole.afficherMessage(v.getIdVehicule() + " (Convoi) bloque l'entrée du sens opposé et attend.");
+            AffichageConsole.rafraichirPont(this);
         }
 
-        // Si le pont doit s'ouvrir et que tous les véhicules sont sortis
-        if (vehiculesSurPont == 0 && etat == EtatPont.OUVERTURE) {
-            notifyAll();
-        }
-
-        // Réveille les convois ou véhicules en attente d'évacuation
-        notifyAll();
-    }
-
-    /**
-     * Réservation atomique des segments demandés.
-     */
-    public synchronized void reserverSegments(int indexTete, int nbSegmentsNecessaires, Sens sens, Vehicule v) throws InterruptedException {
-        boolean estPrioritaire = (v instanceof VehiculePrioritaire);
-
-        while (!peutReserver(indexTete, nbSegmentsNecessaires, sens, estPrioritaire)) {
+        while (!peutEntrer(nbSeg, sens, isConvoi)) {
             wait();
         }
 
-        for (int i = 0; i < nbSegmentsNecessaires; i++) {
-            int indexAReserver = calculerIndexReel(indexTete, i, sens);
-            segments[indexAReserver].tryOccuper(v);
+        if (isConvoi) {
+            if (sens == Sens.GAUCHE_DROITE) convoisEnAttenteGD--;
+            else convoisEnAttenteDG--;
+            convoisSurPont++;
         }
+
+        // Réservation simultanée des segments d'entrée (1, 2 ou 4)
+        for (int i = 0; i < nbSeg; i++) {
+            int idx = (sens == Sens.GAUCHE_DROITE) ? i : (nbSegment - 1 - i);
+            segments[idx].occuper(v, sens);
+        }
+
+        if (sens == Sens.GAUCHE_DROITE) vehiculesGD++;
+        else vehiculesDG++;
+
+        AffichageConsole.afficherMessage(v.getIdVehicule() + " entre sur le pont (" + sens + ").");
+        AffichageConsole.rafraichirPont(this);
     }
 
-    /**
-     * Libère les segments quittés et notifie les autres véhicules.
-     */
-    public synchronized void libererSegments(int indexTete, int nbSegmentsNecessaires, Sens sens, Vehicule v) {
-        for (int i = 0; i < nbSegmentsNecessaires; i++) {
-            int indexALiberer = calculerIndexReel(indexTete, i, sens);
-            if (indexALiberer >= 0 && indexALiberer < nbSegment) {
-                segments[indexALiberer].sortir(v);
-            }
-        }
-        notifyAll();
-    }
+    private boolean peutEntrer(int nbSeg, Sens sens, boolean isConvoi) {
+        // Interdit d'entrer si le pont n'est pas FERMÉ ou si une urgence est en cours
+        if (etat != EtatPont.FERME || prioritairesActifs > 0) return false;
 
-    /**
-     * Vérifie la disponibilité des segments et les règles de circulation.
-     */
-    private boolean peutReserver(int indexTete, int nbSegmentsNecessaires, Sens sens, boolean estPrioritaire) {
-        // Le pont doit être FERME pour la circulation routière
-        if (etat != EtatPont.FERME) {
-            return false;
+        // Si un bateau attend et que le délai d'ouverture est autorisé, on bloque les entrées
+        if (!fileBateaux.isEmpty() && controleur != null && controleur.isOuvertureAutorisee()) return false;
+
+        // Si un convoi est déjà sur le pont dans le sens opposé, ou attend en face
+        if (sens == Sens.GAUCHE_DROITE && convoisEnAttenteDG > 0) return false;
+        if (sens == Sens.DROITE_GAUCHE && convoisEnAttenteGD > 0) return false;
+        if (convoisSurPont > 0) {
+            // Un convoi ne tolère aucun véhicule en sens inverse
+            if (sens == Sens.GAUCHE_DROITE && vehiculesDG > 0) return false;
+            if (sens == Sens.DROITE_GAUCHE && vehiculesGD > 0) return false;
         }
 
-        if (vehiculePrioritaireActif && !estPrioritaire) {
-            return false;
+        // Si CE véhicule est un convoi, il attend que la voie opposée soit totalement vide
+        if (isConvoi) {
+            if (sens == Sens.GAUCHE_DROITE && vehiculesDG > 0) return false;
+            if (sens == Sens.DROITE_GAUCHE && vehiculesGD > 0) return false;
         }
 
-        if (sens == Sens.GAUCHE_DROITE && convoiEnAttenteDroiteGauche && indexTete == 0) {
-            return false;
+        // Vérifie que tous les segments nécessaires à l'entrée sont libres simultanément
+        for (int i = 0; i < nbSeg; i++) {
+            int idx = (sens == Sens.GAUCHE_DROITE) ? i : (nbSegment - 1 - i);
+            if (!segments[idx].isLibre(sens)) return false;
         }
-        if (sens == Sens.DROITE_GAUCHE && convoiEnAttenteGaucheDroite && indexTete == nbSegment - 1) {
-            return false;
-        }
-
-        for (int i = 0; i < nbSegmentsNecessaires; i++) {
-            int index = calculerIndexReel(indexTete, i, sens);
-            if (index < 0 || index >= nbSegment || !segments[index].isLibre()) {
-                return false;
-            }
-        }
-
         return true;
     }
 
-    /**
-     * Calcule l'indice d'un segment selon le sens de marche.
-     * Pour un convoi/camion, la tête avance et la queue s'étend en arrière.
-     */
-    private int calculerIndexReel(int indexTete, int decalageArriere, Sens sens) {
-        if (sens == Sens.GAUCHE_DROITE) {
-            return indexTete - decalageArriere;
-        } else {
-            return indexTete + decalageArriere;
-        }
-    }
-
-
-    public synchronized void declarerConvoiArrive(Sens sens) throws InterruptedException {
-        if (sens == Sens.GAUCHE_DROITE) {
-            convoiEnAttenteGaucheDroite = true;
-
-            while (vehiculesSensDroiteGauche > 0) {
-                wait();
-            }
-        } else {
-            convoiEnAttenteDroiteGauche = true;
-
-            while (vehiculesSensGaucheDroite > 0) {
-                wait();
-            }
-        }
-    }
-
-    public synchronized void libererConvoi(Sens sens) {
-        if (sens == Sens.GAUCHE_DROITE) {
-            convoiEnAttenteGaucheDroite = false;
-        } else {
-            convoiEnAttenteDroiteGauche = false;
-        }
-        notifyAll();
-    }
-
-
-    public synchronized void demanderOuverture() throws InterruptedException {
-        while (!controleur.isOuvertureAutorisee()) {
-        wait();
-        }
-
-        etat = EtatPont.OUVERTURE; 
-        while (vehiculesSurPont > 0) {
+    public synchronized void avancerSegment(Vehicule v, int prochainIdx, int ancienIdx, Sens sens) throws InterruptedException {
+        // Si un véhicule prioritaire est actif ou si le segment suivant est occupé, on attend (bande d'urgence si prioritaire)
+        while (prioritairesActifs > 0 || !segments[prochainIdx].isLibre(sens)) {
             wait();
         }
-        etat = EtatPont.OUVERT; 
+        // Réserve le segment suivant PUIS libère l'ancien
+        segments[prochainIdx].occuper(v, sens);
+        segments[ancienIdx].sortir(v, sens);
+
+        AffichageConsole.rafraichirPont(this);
         notifyAll();
     }
 
-    public synchronized void demarrerFermeture() {
-        etat = EtatPont.FERMETURE;
+    public synchronized void sortirPont(Vehicule v, int nbSeg, Sens sens, boolean isConvoi) throws InterruptedException {
+        while (prioritairesActifs > 0) {
+            wait();
+        }
+        // Libère les derniers segments occupés à la sortie du pont
+        for (int i = 0; i < nbSeg; i++) {
+            int idx = (sens == Sens.GAUCHE_DROITE) ? (nbSegment - 1 - i) : i;
+            segments[idx].sortir(v, sens);
+        }
+
+        if (sens == Sens.GAUCHE_DROITE) vehiculesGD--;
+        else vehiculesDG--;
+
+        if (isConvoi) convoisSurPont--;
+
+        AffichageConsole.afficherMessage(v.getIdVehicule() + " a quitté le pont.");
+        AffichageConsole.rafraichirPont(this);
         notifyAll();
     }
 
-    public synchronized void terminerOuverture() {
-        etat = EtatPont.FERMETURE;
-        etat = EtatPont.FERME;
-        notifyAll(); 
+    // --- 2. GESTION DES VÉHICULES PRIORITAIRES (Bande d'urgence) ---
 
-        // On lance le chronomètre d'une minute[cite: 4]
-        controleur.notifierFermetureComplete(); 
+    public synchronized void entrerPrioritaire(Vehicule v) throws InterruptedException {
+        prioritairesActifs++;
+        AffichageConsole.afficherMessage("🚨 URGENCE : " + v.getIdVehicule() + " arrive ! Mise sur bande d'urgence des véhicules.");
+        AffichageConsole.rafraichirPont(this);
+        notifyAll();
+
+        // Attend uniquement si le pont est ouvert aux bateaux
+        while (etat != EtatPont.FERME && etat != EtatPont.OUVERTURE) {
+            wait();
+        }
+        AffichageConsole.afficherMessage("🚨 " + v.getIdVehicule() + " traverse le pont à toute vitesse !");
     }
 
-    // Méthode appelée par le TimerTask du contrôleur
+    public synchronized void sortirPrioritaire(Vehicule v) {
+        prioritairesActifs--;
+        AffichageConsole.afficherMessage("🚨 " + v.getIdVehicule() + " a quitté le pont. Reprise de la circulation.");
+        AffichageConsole.rafraichirPont(this);
+        notifyAll(); // Libère les véhicules rangés sur la bande d'urgence
+    }
+
+    // --- 3. GESTION DES BATEAUX (File FIFO & États du pont) ---
+
+    public synchronized void demanderPassageBateau(Bateau b) throws InterruptedException {
+        fileBateaux.add(b);
+        AffichageConsole.afficherMessage("⛵ " + b.getNomBateau() + " rejoint la file FIFO (Position " + fileBateaux.size() + ").");
+        AffichageConsole.rafraichirPont(this);
+        notifyAll();
+
+        // Attend d'être en tête de la file FIFO et qu'aucun autre bateau ne soit au milieu du pont
+        while (fileBateaux.peek() != b || bateauEnCoursDePassage) {
+            wait();
+        }
+
+        // Si le pont est FERMÉ, le bateau en tête de file déclenche la séquence d'ouverture
+        if (etat == EtatPont.FERME) {
+            while (controleur != null && !controleur.isOuvertureAutorisee()) {
+                wait();
+            }
+            etat = EtatPont.OUVERTURE;
+            AffichageConsole.afficherMessage("🌉 Pont en cours d'OUVERTURE (attente de la sortie des véhicules engagés)...");
+            AffichageConsole.rafraichirPont(this);
+
+            // Attend que tous les véhicules terrestres et prioritaires aient quitté le pont
+            while (vehiculesGD > 0 || vehiculesDG > 0 || prioritairesActifs > 0) {
+                wait();
+            }
+
+            etat = EtatPont.OUVERT;
+            AffichageConsole.afficherMessage("🌉 Le pont est OUVERT aux bateaux !");
+            AffichageConsole.rafraichirPont(this);
+        }
+
+        bateauEnCoursDePassage = true;
+    }
+
+    public synchronized void terminerPassageBateau(Bateau b) {
+        fileBateaux.poll(); // Retire le bateau de la file FIFO
+        bateauEnCoursDePassage = false;
+        AffichageConsole.afficherMessage("⛵ " + b.getNomBateau() + " a terminé sa traversée.");
+
+        // Si la file FIFO des bateaux est vide, on referme le pont
+        if (fileBateaux.isEmpty()) {
+            etat = EtatPont.FERMETURE;
+            AffichageConsole.afficherMessage("🌉 File de bateaux vide : Pont en cours de FERMETURE...");
+            AffichageConsole.rafraichirPont(this);
+
+            etat = EtatPont.FERME;
+            AffichageConsole.afficherMessage("🌉 Le pont est FERMÉ (ouvert à la circulation routière).");
+            if (controleur != null) {
+                controleur.notifierFermetureComplete();
+            }
+        }
+        AffichageConsole.rafraichirPont(this);
+        notifyAll();
+    }
+
     public synchronized void notifierDelaiEcoule() {
-        notifyAll(); // Réveille les bateaux qui attendaient que l'heure passe
-    }
-
-    public synchronized void terminerFermeture() {
-        etat = EtatPont.FERME;
         notifyAll();
-    }
-
-
-    public synchronized void activerUrgence() {
-        vehiculePrioritaireActif = true;
-        notifyAll();
-    }
-
-    public synchronized void desactiverUrgence() {
-        vehiculePrioritaireActif = false;
-        notifyAll();
-    }
-
-    public void setControleur(ControleurOuverture controleur) {
-        this.controleur = controleur;
     }
 }
