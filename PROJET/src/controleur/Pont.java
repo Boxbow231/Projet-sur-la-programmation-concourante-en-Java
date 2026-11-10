@@ -2,6 +2,7 @@ package controleur;
 
 import ressource.Vehicule;
 import ressource.VehiculePrioritaire;
+import thread.ControleurOuverture;
 
 public class Pont {
 
@@ -16,6 +17,8 @@ public class Pont {
     private boolean convoiEnAttenteGaucheDroite = false;
     private boolean convoiEnAttenteDroiteGauche = false;
     private boolean vehiculePrioritaireActif = false;
+
+    private ControleurOuverture controleur;
 
     public Pont(int nbSegment) {
         this.nbSegment = nbSegment;
@@ -177,12 +180,15 @@ public class Pont {
 
 
     public synchronized void demanderOuverture() throws InterruptedException {
-        etat = EtatPont.OUVERTURE;
+        while (!controleur.isOuvertureAutorisee()) {
+        wait();
+        }
 
+        etat = EtatPont.OUVERTURE; 
         while (vehiculesSurPont > 0) {
             wait();
         }
-        etat = EtatPont.OUVERT;
+        etat = EtatPont.OUVERT; 
         notifyAll();
     }
 
@@ -191,12 +197,25 @@ public class Pont {
         notifyAll();
     }
 
+    public synchronized void terminerOuverture() {
+        etat = EtatPont.FERMETURE;
+        etat = EtatPont.FERME;
+        notifyAll(); 
+
+        // On lance le chronomètre d'une minute[cite: 4]
+        controleur.notifierFermetureComplete(); 
+    }
+
+    // Méthode appelée par le TimerTask du contrôleur
+    public synchronized void notifierDelaiEcoule() {
+        notifyAll(); // Réveille les bateaux qui attendaient que l'heure passe
+    }
+
     public synchronized void terminerFermeture() {
         etat = EtatPont.FERME;
         notifyAll();
     }
 
-    // --- Gestion des urgences ---
 
     public synchronized void activerUrgence() {
         vehiculePrioritaireActif = true;
@@ -206,5 +225,9 @@ public class Pont {
     public synchronized void desactiverUrgence() {
         vehiculePrioritaireActif = false;
         notifyAll();
+    }
+
+    public void setControleur(ControleurOuverture controleur) {
+        this.controleur = controleur;
     }
 }
