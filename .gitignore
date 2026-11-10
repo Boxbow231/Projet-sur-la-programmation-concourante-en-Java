@@ -1,0 +1,10 @@
+/.metadata/
+
+# IntelliJ
+.idea/
+
+# Eclipse
+.metadata/
+.project
+.classpath
+.settings/
