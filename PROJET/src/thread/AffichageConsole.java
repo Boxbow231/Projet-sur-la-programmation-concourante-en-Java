@@ -11,6 +11,12 @@ public class AffichageConsole {
     private static final LinkedList<String> logs = new LinkedList<>();
     private static final int MAX_LOGS = 8;
 
+    /**
+     * Ajoute un message à l'historique des événements (limité aux derniers messages)
+     * et l'affiche dans la console.
+     *
+     * @param message le message à enregistrer et afficher
+     */
     public static synchronized void afficherMessage(String message) {
         logs.addLast(message);
         if (logs.size() > MAX_LOGS) {
@@ -19,8 +25,13 @@ public class AffichageConsole {
         System.out.println("LOG : " + message);
     }
 
+    /**
+     * Efface la console puis redessine l'état du pont, l'occupation des segments
+     * sur les deux voies et les derniers événements.
+     *
+     * @param pont le pont à afficher
+     */
     public static synchronized void rafraichirPont(Pont pont) {
-        // Séquence ANSI pour effacer l'écran et replacer le curseur en haut à gauche
         System.out.print("\033[2J\033[H");
 
         System.out.println("==================================================================");
@@ -31,7 +42,6 @@ public class AffichageConsole {
 
         Segment[] segments = pont.getSegments();
 
-        // Affichage Voie Gauche -> Droite
         System.out.print("Voie G->D : ");
         for (Segment s : segments) {
             Vehicule v = s.getOccupant(Sens.GAUCHE_DROITE);
@@ -39,7 +49,6 @@ public class AffichageConsole {
         }
         System.out.println();
 
-        // Affichage Voie Droite -> Gauche
         System.out.print("Voie D->G : ");
         for (Segment s : segments) {
             Vehicule v = s.getOccupant(Sens.DROITE_GAUCHE);

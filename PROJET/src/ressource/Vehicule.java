@@ -10,6 +10,15 @@ public abstract class Vehicule extends Thread {
     protected int nbSegmentsNecessaires;
     protected boolean isConvoi;
 
+    /**
+     * Construit un véhicule terrestre.
+     *
+     * @param idVehicule l'identifiant du véhicule
+     * @param pont le pont à traverser
+     * @param sens le sens de circulation
+     * @param nbSegmentsNecessaires le nombre de segments occupés par le véhicule
+     * @param isConvoi true si le véhicule est un convoi exceptionnel
+     */
     public Vehicule(String idVehicule, Pont pont, Sens sens, int nbSegmentsNecessaires, boolean isConvoi) {
         this.idVehicule = idVehicule;
         this.pont = pont;
@@ -18,22 +27,28 @@ public abstract class Vehicule extends Thread {
         this.isConvoi = isConvoi;
     }
 
+    /**
+     * Retourne l'identifiant du véhicule.
+     *
+     * @return l'identifiant du véhicule
+     */
     public String getIdVehicule() {
         return idVehicule;
     }
 
+    /**
+     * Exécute la traversée du pont : entrée, progression segment par segment, puis sortie.
+     */
     @Override
     public void run() {
         try {
             int N = pont.getNbSegment();
 
-            // 1. Entrée sur le pont (réserve simultanément les nbSegmentsNecessaires premiers segments)
             pont.entrerPont(this, nbSegmentsNecessaires, sens, isConvoi);
 
             int pasRestants = N - nbSegmentsNecessaires;
             int tete = (sens == Sens.GAUCHE_DROITE) ? (nbSegmentsNecessaires - 1) : (N - nbSegmentsNecessaires);
 
-            // 2. Progression segment par segment sur le pont
             for (int pas = 0; pas < pasRestants; pas++) {
                 Thread.sleep(800);
                 int prochaineTete = (sens == Sens.GAUCHE_DROITE) ? (tete + 1) : (tete - 1);
@@ -43,7 +58,6 @@ public abstract class Vehicule extends Thread {
                 tete = prochaineTete;
             }
 
-            // 3. Sortie complète du pont
             Thread.sleep(800);
             pont.sortirPont(this, nbSegmentsNecessaires, sens, isConvoi);
 

@@ -1,9 +1,5 @@
 package controleur;
-/**
- * Représente les directions de circulation du pont :
- * - Véhicules terrestres : GAUCHE_VERS_DROITE, DROITE_VERS_GAUCHE
- * - Bateaux : NORD_VERS_SUD, SUD_VERS_NORD
- */
+
 public enum Sens {
     GAUCHE_DROITE,
     DROITE_GAUCHE,
@@ -12,6 +8,8 @@ public enum Sens {
 
     /**
      * Indique si la direction concerne un véhicule terrestre.
+     *
+     * @return true si le sens est GAUCHE_DROITE ou DROITE_GAUCHE, false sinon
      */
     public boolean isTerrestre(){
         if (this == GAUCHE_DROITE || this == DROITE_GAUCHE){
@@ -22,6 +20,8 @@ public enum Sens {
 
     /**
      * Indique si la direction concerne un bateau.
+     *
+     * @return true si le sens est SUD_NORD ou NORD_SUD, false sinon
      */
     public boolean isMaritime(){
         if (this == SUD_NORD || this == NORD_SUD){
@@ -31,8 +31,9 @@ public enum Sens {
     }
 
     /**
-     * Retourne le sens inverse (très utile pour bloquer la voie opposée
-     * lors du passage d'un convoi exceptionnel).
+     * Retourne le sens opposé au sens courant.
+     *
+     * @return le sens inverse du sens courant
      */
     public Sens getSensOppose() {
         switch (this) {
