@@ -1,27 +1,31 @@
-package thread;
+package ressource;
+
 import controleur.Pont;
+import controleur.Sens;
+import thread.AffichageConsole;
 
 public class Bateau extends Thread {
-    private String nom;
-    private Pont pont;
+    private final String nom;
+    private final Pont pont;
+    private final Sens sens;
 
-    public Bateau(String nom, Pont pont) {
+    public Bateau(String nom, Pont pont, Sens sens) {
         this.nom = nom;
         this.pont = pont;
+        this.sens = sens;
+    }
+
+    public String getNomBateau() {
+        return nom + "(" + sens + ")";
     }
 
     @Override
     public void run() {
         try {
-            AffichageConsole.afficherMessage(nom + " arrive et demande l'ouverture du pont.");
-            pont.demanderOuverture(); // Bloque jusqu'à ce que le pont soit vide
-            
-            AffichageConsole.afficherMessage(nom + " traverse le pont (Pont OUVERT).");
-            Thread.sleep(3000); // Temps de traversée du bateau
-            
-            pont.terminerOuverture(); // Referme le pont et libère les véhicules
-            AffichageConsole.afficherMessage(nom + " est passé, le pont se referme.");
-            
+            pont.demanderPassageBateau(this);
+            AffichageConsole.afficherMessage("⛵ " + getNomBateau() + " navigue sous le pont...");
+            Thread.sleep(2000); // Temps de passage du bateau
+            pont.terminerPassageBateau(this);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }

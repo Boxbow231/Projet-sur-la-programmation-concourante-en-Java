@@ -1,22 +1,24 @@
 package ressource;
 
-public class VehiculePrioritaire extends Voiture {
-    private String typeService; // Police, Pompier, SAMU
-    private boolean sireneActive;
+import controleur.Pont;
+import controleur.Sens;
 
-    public VehiculePrioritaire(String immatriculation, double poidsTonnes, int vitesseMax, int nombrePortes, String typeService) {
-        super(immatriculation, poidsTonnes, vitesseMax, nombrePortes);
+public class VehiculePrioritaire extends Vehicule {
+    private final String typeService;
+
+    public VehiculePrioritaire(String idVehicule, Pont pont, Sens sens, String typeService) {
+        super(idVehicule, pont, sens, 1, false);
         this.typeService = typeService;
-        this.sireneActive = false;
-    }
-
-    public void activerSirene() {
-        this.sireneActive = true;
-        System.out.println("PIN PON PIN PON ! (" + typeService + ")");
     }
 
     @Override
-    public void seDeplacer() {
-        System.out.println("Le véhicule de " + typeService + " roule à toute vitesse !");
+    public void run() {
+        try {
+            pont.entrerPrioritaire(this);
+            Thread.sleep(1500);
+            pont.sortirPrioritaire(this);
+        } catch (InterruptedException e) {
+            System.err.println(idVehicule + " (" + typeService + ") interrompu.");
+        }
     }
 }

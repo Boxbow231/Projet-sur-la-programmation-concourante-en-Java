@@ -1,4 +1,4 @@
-package thread;
+package ressource;
 
 import controleur.Pont;
 import controleur.Sens;
@@ -8,12 +8,14 @@ public abstract class Vehicule extends Thread {
     protected Pont pont;
     protected Sens sens;
     protected int nbSegmentsNecessaires;
+    protected boolean isConvoi;
 
-    public Vehicule(String idVehicule, Pont pont, Sens sens, int nbSegmentsNecessaires) {
+    public Vehicule(String idVehicule, Pont pont, Sens sens, int nbSegmentsNecessaires, boolean isConvoi) {
         this.idVehicule = idVehicule;
         this.pont = pont;
         this.sens = sens;
         this.nbSegmentsNecessaires = nbSegmentsNecessaires;
+        this.isConvoi = isConvoi;
     }
 
     public String getIdVehicule() {
@@ -23,31 +25,27 @@ public abstract class Vehicule extends Thread {
     @Override
     public void run() {
         try {
-            int positionEntree = (sens == Sens.GAUCHE_DROITE) ? 0 : pont.getNbSegment() - 1;
-            int positionSortie = (sens == Sens.GAUCHE_DROITE) ? pont.getNbSegment() : -1;
-            int direction = (sens == Sens.GAUCHE_DROITE) ? 1 : -1;
-            AffichageConsole.afficherMessage(idVehicule + " attend pour entrer.");
-            pont.reserverSegments(positionEntree, nbSegmentsNecessaires, sens, this);
-            pont.entrerPont();
-            AffichageConsole.afficherMessage(idVehicule + " est entré sur le pont.");
+            int N = pont.getNbSegment();
 
-            int positionCourante = positionEntree;
+            // 1. Entrée sur le pont (réserve simultanément les nbSegmentsNecessaires premiers segments)
+            pont.entrerPont(this, nbSegmentsNecessaires, sens, isConvoi);
 
-            for (int i = 1; i < pont.getNbSegment(); i++) {
-                Thread.sleep(1000); // Temps de trajet pour un segment
+            int pasRestants = N - nbSegmentsNecessaires;
+            int tete = (sens == Sens.GAUCHE_DROITE) ? (nbSegmentsNecessaires - 1) : (N - nbSegmentsNecessaires);
 
-                int nouvellePosition = positionCourante + direction;
-                pont.libererSegments(positionCourante, nbSegmentsNecessaires, sens, this);
-                pont.reserverSegments(nouvellePosition, nbSegmentsNecessaires, sens, this);
-                
-                positionCourante = nouvellePosition;
-                AffichageConsole.afficherMessage(idVehicule + " avance en position " + positionCourante);
+            // 2. Progression segment par segment sur le pont
+            for (int pas = 0; pas < pasRestants; pas++) {
+                Thread.sleep(800);
+                int prochaineTete = (sens == Sens.GAUCHE_DROITE) ? (tete + 1) : (tete - 1);
+                int ancienneQueue = (sens == Sens.GAUCHE_DROITE) ? (tete - nbSegmentsNecessaires + 1) : (tete + nbSegmentsNecessaires - 1);
+
+                pont.avancerSegment(this, prochaineTete, ancienneQueue, sens);
+                tete = prochaineTete;
             }
 
-            Thread.sleep(1000);
-            pont.libererSegments(positionCourante, nbSegmentsNecessaires, sens, this);
-            pont.sortirPont();
-            AffichageConsole.afficherMessage(idVehicule + " a quitté le pont.");
+            // 3. Sortie complète du pont
+            Thread.sleep(800);
+            pont.sortirPont(this, nbSegmentsNecessaires, sens, isConvoi);
 
         } catch (InterruptedException e) {
             System.err.println(idVehicule + " a été interrompu.");

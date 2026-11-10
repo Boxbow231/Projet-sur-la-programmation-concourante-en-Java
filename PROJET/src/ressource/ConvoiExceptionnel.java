@@ -1,17 +1,10 @@
 package ressource;
 
-public class ConvoiExceptionnel extends Camion {
-    private double longueurMetres;
+import controleur.Pont;
+import controleur.Sens;
 
-    public ConvoiExceptionnel(String immatriculation, double poidsTonnes, int vitesseMax, double capaciteChargeTonnes, double longueurMetres) {
-        super(immatriculation, poidsTonnes, vitesseMax, capaciteChargeTonnes);
-        this.longueurMetres = longueurMetres;
-    }
-
-    public double getLongueurMetres() { return longueurMetres; }
-
-    @Override
-    public void seDeplacer() {
-        System.out.println("Le convoi exceptionnel avance lentement avec ses escortes.");
+public class ConvoiExceptionnel extends Vehicule {
+    public ConvoiExceptionnel(String idVehicule, Pont pont, Sens sens) {
+        super(idVehicule, pont, sens, 4, true);
     }
 }

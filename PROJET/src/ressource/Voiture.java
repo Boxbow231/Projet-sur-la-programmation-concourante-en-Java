@@ -1,17 +1,10 @@
 package ressource;
 
+import controleur.Pont;
+import controleur.Sens;
+
 public class Voiture extends Vehicule {
-    private int nombrePortes;
-
-    public Voiture(String immatriculation, double poidsTonnes, int vitesseMax, int nombrePortes) {
-        super(immatriculation, poidsTonnes, vitesseMax);
-        this.nombrePortes = nombrePortes;
-    }
-
-    public int getNombrePortes() { return nombrePortes; }
-
-    @Override
-    public void seDeplacer() {
-        System.out.println("La voiture roule sur la route.");
+    public Voiture(String idVehicule, Pont pont, Sens sens) {
+        super(idVehicule, pont, sens, 1, false);
     }
 }
