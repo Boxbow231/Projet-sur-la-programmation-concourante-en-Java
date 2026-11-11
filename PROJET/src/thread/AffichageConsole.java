@@ -7,20 +7,27 @@ import ressource.Vehicule;
 
 import java.util.LinkedList;
 
+/**
+ * Gère l'affichage dynamique de la simulation et des événements dans le terminal.
+ */
 public class AffichageConsole {
     private static final LinkedList<String> logs = new LinkedList<>();
     private static final int MAX_LOGS = 8;
 
+    /**
+     * Enregistre un message dans l'historique des événements récents.
+     */
     public static synchronized void afficherMessage(String message) {
         logs.addLast(message);
         if (logs.size() > MAX_LOGS) {
             logs.removeFirst();
         }
-        System.out.println("LOG : " + message);
     }
 
+    /**
+     * Rafraîchit l'affichage complet du pont et de son état dans la console.
+     */
     public static synchronized void rafraichirPont(Pont pont) {
-        // Séquence ANSI pour effacer l'écran et replacer le curseur en haut à gauche
         System.out.print("\033[2J\033[H");
 
         System.out.println("==================================================================");
@@ -31,7 +38,6 @@ public class AffichageConsole {
 
         Segment[] segments = pont.getSegments();
 
-        // Affichage Voie Gauche -> Droite
         System.out.print("Voie G->D : ");
         for (Segment s : segments) {
             Vehicule v = s.getOccupant(Sens.GAUCHE_DROITE);
@@ -39,7 +45,6 @@ public class AffichageConsole {
         }
         System.out.println();
 
-        // Affichage Voie Droite -> Gauche
         System.out.print("Voie D->G : ");
         for (Segment s : segments) {
             Vehicule v = s.getOccupant(Sens.DROITE_GAUCHE);

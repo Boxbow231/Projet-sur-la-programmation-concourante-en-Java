@@ -8,28 +8,31 @@ import ressource.Vehicule;
 import java.util.LinkedList;
 import java.util.Queue;
 
+/**
+ * Représente le pont mobile (ressource partagée centrale).
+ * Gère la synchronisation des threads (véhicules et bateaux), les priorités et les états.
+ */
 public class Pont {
     private final int nbSegment;
     private final Segment[] segments;
     private EtatPont etat;
     private ControleurOuverture controleur;
 
-    // Compteurs de véhicules sur le pont par sens
     private int vehiculesGD = 0;
     private int vehiculesDG = 0;
 
-    // Gestion des Convois Exceptionnels
     private int convoisEnAttenteGD = 0;
     private int convoisEnAttenteDG = 0;
     private int convoisSurPont = 0;
 
-    // Gestion des Véhicules Prioritaires (Ambulances / Pompiers)
     private int prioritairesActifs = 0;
 
-    // Gestion des Bateaux (File FIFO commune)
     private final Queue<Bateau> fileBateaux = new LinkedList<>();
     private boolean bateauEnCoursDePassage = false;
 
+    /**
+     * Initialise le pont avec un nombre défini de segments.
+     */
     public Pont(int nbSegment) {
         this.nbSegment = nbSegment;
         this.segments = new Segment[nbSegment];
@@ -39,35 +42,53 @@ public class Pont {
         this.etat = EtatPont.FERME;
     }
 
+    /**
+     * Associe le contrôleur d'ouverture (timer) au pont.
+     */
     public void setControleur(ControleurOuverture controleur) {
         this.controleur = controleur;
     }
 
+    /**
+     * Retourne le nombre total de segments du pont.
+     */
     public int getNbSegment() {
         return nbSegment;
     }
 
+    /**
+     * Retourne le tableau contenant les segments du pont.
+     */
     public Segment[] getSegments() {
         return segments;
     }
 
+    /**
+     * Retourne l'état actuel du pont.
+     */
     public synchronized EtatPont getEtat() {
         return etat;
     }
 
+    /**
+     * Retourne le nombre de véhicules prioritaires actuellement sur le pont.
+     */
     public synchronized int getPrioritairesActifs() {
         return prioritairesActifs;
     }
 
+    /**
+     * Retourne la taille de la file d'attente FIFO des bateaux.
+     */
     public synchronized int getNbBateauxEnAttente() {
         return fileBateaux.size();
     }
 
-    // --- 1. GESTION DES VÉHICULES NORMAUX, CAMIONS ET CONVOIS ---
-
+    /**
+     * Gère l'entrée d'un véhicule terrestre sur le pont en réservant simultanément les segments nécessaires.
+     */
     public synchronized void entrerPont(Vehicule v, int nbSeg, Sens sens, boolean isConvoi) throws InterruptedException {
         if (isConvoi) {
-            // Bloque immédiatement l'entrée du sens opposé
             if (sens == Sens.GAUCHE_DROITE) convoisEnAttenteGD++;
             else convoisEnAttenteDG++;
             AffichageConsole.afficherMessage(v.getIdVehicule() + " (Convoi) bloque l'entrée du sens opposé et attend.");
@@ -84,7 +105,6 @@ public class Pont {
             convoisSurPont++;
         }
 
-        // Réservation simultanée des segments d'entrée (1, 2 ou 4)
         for (int i = 0; i < nbSeg; i++) {
             int idx = (sens == Sens.GAUCHE_DROITE) ? i : (nbSegment - 1 - i);
             segments[idx].occuper(v, sens);
@@ -97,29 +117,26 @@ public class Pont {
         AffichageConsole.rafraichirPont(this);
     }
 
+    /**
+     * Vérifie si les conditions sont réunies pour qu'un véhicule puisse entrer sur le pont.
+     */
     private boolean peutEntrer(int nbSeg, Sens sens, boolean isConvoi) {
-        // Interdit d'entrer si le pont n'est pas FERMÉ ou si une urgence est en cours
         if (etat != EtatPont.FERME || prioritairesActifs > 0) return false;
-
-        // Si un bateau attend et que le délai d'ouverture est autorisé, on bloque les entrées
         if (!fileBateaux.isEmpty() && controleur != null && controleur.isOuvertureAutorisee()) return false;
 
-        // Si un convoi est déjà sur le pont dans le sens opposé, ou attend en face
         if (sens == Sens.GAUCHE_DROITE && convoisEnAttenteDG > 0) return false;
         if (sens == Sens.DROITE_GAUCHE && convoisEnAttenteGD > 0) return false;
+
         if (convoisSurPont > 0) {
-            // Un convoi ne tolère aucun véhicule en sens inverse
             if (sens == Sens.GAUCHE_DROITE && vehiculesDG > 0) return false;
             if (sens == Sens.DROITE_GAUCHE && vehiculesGD > 0) return false;
         }
 
-        // Si CE véhicule est un convoi, il attend que la voie opposée soit totalement vide
         if (isConvoi) {
             if (sens == Sens.GAUCHE_DROITE && vehiculesDG > 0) return false;
             if (sens == Sens.DROITE_GAUCHE && vehiculesGD > 0) return false;
         }
 
-        // Vérifie que tous les segments nécessaires à l'entrée sont libres simultanément
         for (int i = 0; i < nbSeg; i++) {
             int idx = (sens == Sens.GAUCHE_DROITE) ? i : (nbSegment - 1 - i);
             if (!segments[idx].isLibre(sens)) return false;
@@ -127,12 +144,13 @@ public class Pont {
         return true;
     }
 
+    /**
+     * Fait avancer un véhicule d'un segment, en réservant le nouveau et en libérant l'ancien.
+     */
     public synchronized void avancerSegment(Vehicule v, int prochainIdx, int ancienIdx, Sens sens) throws InterruptedException {
-        // Si un véhicule prioritaire est actif ou si le segment suivant est occupé, on attend (bande d'urgence si prioritaire)
         while (prioritairesActifs > 0 || !segments[prochainIdx].isLibre(sens)) {
             wait();
         }
-        // Réserve le segment suivant PUIS libère l'ancien
         segments[prochainIdx].occuper(v, sens);
         segments[ancienIdx].sortir(v, sens);
 
@@ -140,11 +158,13 @@ public class Pont {
         notifyAll();
     }
 
+    /**
+     * Gère la sortie complète d'un véhicule du pont et libère ses derniers segments occupés.
+     */
     public synchronized void sortirPont(Vehicule v, int nbSeg, Sens sens, boolean isConvoi) throws InterruptedException {
         while (prioritairesActifs > 0) {
             wait();
         }
-        // Libère les derniers segments occupés à la sortie du pont
         for (int i = 0; i < nbSeg; i++) {
             int idx = (sens == Sens.GAUCHE_DROITE) ? (nbSegment - 1 - i) : i;
             segments[idx].sortir(v, sens);
@@ -160,42 +180,44 @@ public class Pont {
         notifyAll();
     }
 
-    // --- 2. GESTION DES VÉHICULES PRIORITAIRES (Bande d'urgence) ---
-
+    /**
+     * Gère l'arrivée d'un véhicule prioritaire (force la mise sur bande d'urgence des autres véhicules).
+     */
     public synchronized void entrerPrioritaire(Vehicule v) throws InterruptedException {
         prioritairesActifs++;
         AffichageConsole.afficherMessage("🚨 URGENCE : " + v.getIdVehicule() + " arrive ! Mise sur bande d'urgence des véhicules.");
         AffichageConsole.rafraichirPont(this);
         notifyAll();
 
-        // Attend uniquement si le pont est ouvert aux bateaux
         while (etat != EtatPont.FERME && etat != EtatPont.OUVERTURE) {
             wait();
         }
         AffichageConsole.afficherMessage("🚨 " + v.getIdVehicule() + " traverse le pont à toute vitesse !");
     }
 
+    /**
+     * Gère la sortie d'un véhicule prioritaire (autorise la reprise du trafic normal).
+     */
     public synchronized void sortirPrioritaire(Vehicule v) {
         prioritairesActifs--;
         AffichageConsole.afficherMessage("🚨 " + v.getIdVehicule() + " a quitté le pont. Reprise de la circulation.");
         AffichageConsole.rafraichirPont(this);
-        notifyAll(); // Libère les véhicules rangés sur la bande d'urgence
+        notifyAll();
     }
 
-    // --- 3. GESTION DES BATEAUX (File FIFO & États du pont) ---
-
+    /**
+     * Enregistre un bateau dans la file FIFO et déclenche l'ouverture du pont si possible.
+     */
     public synchronized void demanderPassageBateau(Bateau b) throws InterruptedException {
         fileBateaux.add(b);
         AffichageConsole.afficherMessage("⛵ " + b.getNomBateau() + " rejoint la file FIFO (Position " + fileBateaux.size() + ").");
         AffichageConsole.rafraichirPont(this);
         notifyAll();
 
-        // Attend d'être en tête de la file FIFO et qu'aucun autre bateau ne soit au milieu du pont
         while (fileBateaux.peek() != b || bateauEnCoursDePassage) {
             wait();
         }
 
-        // Si le pont est FERMÉ, le bateau en tête de file déclenche la séquence d'ouverture
         if (etat == EtatPont.FERME) {
             while (controleur != null && !controleur.isOuvertureAutorisee()) {
                 wait();
@@ -204,7 +226,6 @@ public class Pont {
             AffichageConsole.afficherMessage("🌉 Pont en cours d'OUVERTURE (attente de la sortie des véhicules engagés)...");
             AffichageConsole.rafraichirPont(this);
 
-            // Attend que tous les véhicules terrestres et prioritaires aient quitté le pont
             while (vehiculesGD > 0 || vehiculesDG > 0 || prioritairesActifs > 0) {
                 wait();
             }
@@ -217,12 +238,14 @@ public class Pont {
         bateauEnCoursDePassage = true;
     }
 
+    /**
+     * Gère la fin de traversée d'un bateau et déclenche la fermeture si la file est vide.
+     */
     public synchronized void terminerPassageBateau(Bateau b) {
-        fileBateaux.poll(); // Retire le bateau de la file FIFO
+        fileBateaux.poll();
         bateauEnCoursDePassage = false;
         AffichageConsole.afficherMessage("⛵ " + b.getNomBateau() + " a terminé sa traversée.");
 
-        // Si la file FIFO des bateaux est vide, on referme le pont
         if (fileBateaux.isEmpty()) {
             etat = EtatPont.FERMETURE;
             AffichageConsole.afficherMessage("🌉 File de bateaux vide : Pont en cours de FERMETURE...");
@@ -238,6 +261,9 @@ public class Pont {
         notifyAll();
     }
 
+    /**
+     * Réveille les threads en attente (notamment les bateaux) lorsque le délai d'ouverture est écoulé.
+     */
     public synchronized void notifierDelaiEcoule() {
         notifyAll();
     }
