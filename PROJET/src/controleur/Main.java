@@ -15,24 +15,24 @@ public class Main {
         // Lancement de voitures et camions dans les deux sens
         new Voiture("V1", pont, Sens.GAUCHE_DROITE).start();
         new Voiture("V2", pont, Sens.DROITE_GAUCHE).start();
-        Thread.sleep(500);
+        Thread.sleep(1500);
         new Camion("C1", pont, Sens.GAUCHE_DROITE).start();
 
         // Arrivée d'un convoi exceptionnel (bloque le sens opposé)
-        Thread.sleep(1000);
+        Thread.sleep(2000);
         new ConvoiExceptionnel("CE1", pont, Sens.DROITE_GAUCHE).start();
 
         // Arrivée d'une ambulance (met tout le monde sur la bande d'urgence)
-        Thread.sleep(1500);
+        Thread.sleep(2500);
         new VehiculePrioritaire("AMB1", pont, Sens.GAUCHE_DROITE, "Ambulance").start();
 
         // Arrivée de deux bateaux (File FIFO)
-        Thread.sleep(2000);
+        Thread.sleep(3000);
         new Bateau("Bateau-Nord", pont, Sens.NORD_SUD).start();
         new Bateau("Bateau-Sud", pont, Sens.SUD_NORD).start();
 
         // Nouvelles voitures qui attendront la fermeture du pont
-        Thread.sleep(3000);
+        Thread.sleep(4000);
         new Voiture("V3", pont, Sens.GAUCHE_DROITE).start();
     }
 }

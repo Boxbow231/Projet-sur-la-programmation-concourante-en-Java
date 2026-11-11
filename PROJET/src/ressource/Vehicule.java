@@ -44,7 +44,7 @@ public abstract class Vehicule extends Thread {
             }
 
             // 3. Sortie complète du pont
-            Thread.sleep(800);
+            Thread.sleep(3500);
             pont.sortirPont(this, nbSegmentsNecessaires, sens, isConvoi);
 
         } catch (InterruptedException e) {
